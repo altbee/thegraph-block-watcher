@@ -39,15 +39,20 @@ const checkAndUpdate = async () => {
       `===previous number: ${curBlockNumber - 1}: hash ${blockHash}===`
     );
 
-    await db.tx((t) => {
-      return t.none(
-        `update subgraphs.subgraph_deployment sd
+    try {
+      const data = await db.tx((t) => {
+        return t.none(
+          `update subgraphs.subgraph_deployment sd
 set latest_ethereum_block_hash = decode($1, 'hex'),
 latest_ethereum_block_number = $2
 where sd.deployment = $3`,
-        [blockHash.substring(2), curBlockNumber - 1, DEPLOYMENT]
-      );
-    });
+          [blockHash.substring(2), curBlockNumber - 1, DEPLOYMENT]
+        );
+      });
+      console.log("success:", data);
+    } catch (error) {
+      console.error(error);
+    }
   }
 };
 
