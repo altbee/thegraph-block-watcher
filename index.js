@@ -3,6 +3,7 @@ require("dotenv").config();
 const schedule = require("node-schedule");
 const pgp = require("pg-promise")();
 const { providers } = require("ethers");
+const axios = require("axios");
 
 const PSQL_URL = process.env.PSQL_URL;
 const DEPLOYMENT = process.env.DEPLOYMENT;
@@ -13,6 +14,18 @@ const provider = new JsonRpcProvider("https://evmexplorer.velas.com/rpc", 106);
 // https://stackoverflow.com/questions/9205496/how-to-make-connection-to-postgres-via-node-js
 
 let latestBlockNumber = 0;
+let badCount = 0;
+const BadLimit = 60;
+
+const getBlockData = async (number) => {
+  const data = await axios.post("https://evmexplorer.velas.com/rpc", {
+    jsonrpc: "2.0",
+    method: "eth_getBlockByNumber",
+    params: [`0x${Number(number).toString(16)}`, true],
+    id: 1,
+  });
+  return data.data.result;
+};
 
 const checkAndUpdate = async () => {
   const db = pgp(PSQL_URL);
@@ -31,45 +44,61 @@ const checkAndUpdate = async () => {
     latestBlockNumber = curBlockNumber;
   } else if (latestBlockNumber === curBlockNumber) {
     // need to get block info
+    badCount++;
 
-    const block = await provider.getBlock(curBlockNumber - 1);
-    const blockHash = block.hash;
+    if (badCount === BadLimit) {
+      let finalizedNumber = curBlockNumber - 1;
+      let finalizedBlockHash;
 
-    console.log(
-      `===should update to==previous number: ${
-        curBlockNumber - 1
-      }: hash ${blockHash}===`
-    );
+      while (true) {
+        const block = await getBlockData(finalizedNumber);
 
-    try {
-      const data = await db.tx((t) => {
-        return t.none(
-          `update subgraphs.subgraph_deployment sd
+        if (block && block.isFinalized) {
+          finalizedBlockHash = block.hash;
+          break;
+        }
+      }
+
+      console.log(
+        `===should update to==previous number: ${finalizedNumber}: hash ${finalizedBlockHash}===`
+      );
+
+      try {
+        const data = await db.tx((t) => {
+          return t.none(
+            `update subgraphs.subgraph_deployment sd
 set latest_ethereum_block_hash = decode($1, 'hex'),
 latest_ethereum_block_number = $2
 where sd.deployment = $3`,
-          [blockHash.substring(2), curBlockNumber - 1, DEPLOYMENT]
-        );
-      });
-      console.log("success:", data);
-    } catch (error) {
-      console.error(error);
+            [finalizedBlockHash.substring(2), finalizedNumber, DEPLOYMENT]
+          );
+        });
+        console.log("success:", data);
+
+        latestBlockNumber = finalizedNumber;
+        badCount = 0;
+      } catch (error) {
+        console.error(error);
+      }
     }
+  } else {
+    latestBlockNumber = curBlockNumber;
+    badCount = 0;
   }
 };
 
 const main = async () => {
-  schedule.scheduleJob("0 * * * *", function () {
-    console.log(`======${new Date().toTimeString()}======`);
-    // every hour
-    checkAndUpdate()
-      .then(() => {
-        console.log("====Done====");
-      })
-      .catch((err) => {
-        console.error("===", err);
-      });
-  });
+  // schedule.scheduleJob("* * * * *", function () {
+  console.log(`======${new Date().toTimeString()}======`);
+  // every minute
+  checkAndUpdate()
+    .then(() => {
+      console.log("====Done====");
+    })
+    .catch((err) => {
+      console.error("===", err);
+    });
+  //  });
 };
 
 main();
