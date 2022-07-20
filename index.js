@@ -17,6 +17,8 @@ let latestBlockNumber = 0;
 let badCount = 0;
 const BadLimit = 60;
 
+const db = pgp(PSQL_URL);
+
 const getBlockData = async (number) => {
   const data = await axios.post("https://evmexplorer.velas.com/rpc", {
     jsonrpc: "2.0",
@@ -28,8 +30,6 @@ const getBlockData = async (number) => {
 };
 
 const checkAndUpdate = async () => {
-  const db = pgp(PSQL_URL);
-
   const result = await db.one(
     "SELECT latest_ethereum_block_number FROM subgraphs.subgraph_deployment WHERE deployment = $1",
     [DEPLOYMENT]
@@ -88,17 +88,17 @@ where sd.deployment = $3`,
 };
 
 const main = async () => {
-  // schedule.scheduleJob("* * * * *", function () {
-  console.log(`======${new Date().toTimeString()}======`);
-  // every minute
-  checkAndUpdate()
-    .then(() => {
-      console.log("====Done====");
-    })
-    .catch((err) => {
-      console.error("===", err);
-    });
-  //  });
+  schedule.scheduleJob("* * * * *", function () {
+    console.log(`======${new Date().toTimeString()}======`);
+    // every minute
+    checkAndUpdate()
+      .then(() => {
+        console.log("====Done====");
+      })
+      .catch((err) => {
+        console.error("===", err);
+      });
+  });
 };
 
 main();
