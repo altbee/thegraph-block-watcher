@@ -23,20 +23,22 @@ const checkAndUpdate = async () => {
   );
   const curBlockNumber = Number(result.latest_ethereum_block_number);
 
-  console.log("prevBlockNumber", latestBlockNumber);
-  console.log("curBlockNumber", curBlockNumber);
+  console.log(
+    `===== last Save Block Number: ${latestBlockNumber} === current syncing block number: ${curBlockNumber} =====`
+  );
 
   if (latestBlockNumber === 0) {
     latestBlockNumber = curBlockNumber;
   } else if (latestBlockNumber === curBlockNumber) {
     // need to get block info
-    console.log("===should update===");
 
     const block = await provider.getBlock(curBlockNumber - 1);
     const blockHash = block.hash;
 
     console.log(
-      `===previous number: ${curBlockNumber - 1}: hash ${blockHash}===`
+      `===should update to==previous number: ${
+        curBlockNumber - 1
+      }: hash ${blockHash}===`
     );
 
     try {
