@@ -57,6 +57,7 @@ const checkAndUpdate = async () => {
           finalizedBlockHash = block.hash;
           break;
         }
+        finalizedNumber = finalizedNumber - 1;
       }
 
       console.log(
